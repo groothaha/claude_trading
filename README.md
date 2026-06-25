@@ -21,25 +21,18 @@ state/             전이상태(open_position.json)·cron.log  [gitignore]
 APEX_RULES.md      $50K 하드 제약 규격
 ```
 
-## ⚙️ 활성화에 필요한 단 한 단계 (인증)
-cron은 로그인 세션 밖이라 macOS Keychain의 Claude 인증을 못 쓴다. 터미널에서:
-```
-claude setup-token
-```
-출력된 `sk-ant-oat...` 토큰을 `~/claude_trading/.env` 에 넣는다:
-```
-export CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat...
-```
-(`.env`는 gitignore됨. 이게 비어 있으면 cron 런이 "Not logged in"으로 실패.)
+## 실행 방식 — 로그인된 CLI 세션 루프 (토큰·cron 불필요)
+이 봇은 **이미 로그인된 Claude Code CLI 세션 안에서** self-paced 루프로 돈다(ScheduleWakeup).
+세션 인증을 그대로 쓰므로 **API키·`setup-token`·cron 전부 불필요.** (세션이 떠 있는 동안 발동.)
+- **장시작 틱**(09:30 ET ≈ 22:30 KST): `prompts/open.md` 절차로 진입 결정·기록
+- **장마감 틱**(16:00 ET ≈ 05:05 KST): `prompts/close.md` 절차로 청산·기록
+- 매 틱이 다음 이벤트까지 ScheduleWakeup 재설정(최대 1h, 이벤트 임박 시 정밀하게).
+- 휴장일(07-03·09-07·11-26·12-25)은 감지해 "거래없음" 기록.
 
-## cron (mac 로컬 = KST, 현재 EDT 시즌)
-```
-30 22 * * 1-5  ~/claude_trading/scripts/run_open.sh    # 09:30 ET 진입
-5  5  * * 2-6  ~/claude_trading/scripts/run_close.sh   # 16:05 ET 청산
-```
-- **DST 주의:** 미 EST 전환(2026-11-01) 후엔 1시간 늦춰 `30 23 * * 1-5` / `5 6 * * 2-6`.
-- **맥이 깨어 있어야** cron이 발동(`caffeinate`/전원설정).
-- 휴장일은 에이전트가 감지해 "거래없음" 기록.
+### (선택) cron/headless 폴백 — 세션 못 띄울 때만
+`scripts/run_open.sh`·`run_close.sh`는 cron용 폴백이다. 단 cron은 로그인 세션 밖이라
+Keychain 인증을 못 쓰므로 이때만 `claude setup-token` → `.env`의 `CLAUDE_CODE_OAUTH_TOKEN`
+주입이 필요하다. 기본 운영(CLI 루프)에선 쓰지 않는다.
 
 ## 수동 실행/점검
 ```
